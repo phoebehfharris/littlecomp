@@ -21,7 +21,6 @@ pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
     const input = "10 * 2 - 3";
-
     const tokens = try lexExpr(allocator, input);
 
     for (tokens) |token| {
