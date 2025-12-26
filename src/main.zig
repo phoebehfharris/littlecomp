@@ -1,7 +1,7 @@
 const std = @import("std");
 const frontend = @import("frontend.zig");
 const backend = @import("backend.zig");
-const utils = @import("util.zig");
+const util = @import("util.zig");
 
 const Allocator = std.mem.Allocator;
 const Writer = std.io.Writer;
@@ -12,10 +12,10 @@ const parseExpr = frontend.parseExpr;
 
 const writeCode = backend.writeCode;
 
-const free = utils.free;
-const printToken = utils.printToken;
-const printTree = utils.printTree;
-const eval = utils.eval;
+const free = util.free;
+const printToken = util.printToken;
+const printTree = util.printTree;
+const eval = util.eval;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -28,22 +28,26 @@ pub fn main() !void {
     }
     std.debug.print("\n", .{});
 
-    const x = try parseExpr(allocator, tokens);
-    defer free(allocator, &x);
+    const v = try util.create(allocator, Value, try parseExpr(allocator, tokens));
+    defer free(allocator, v);
 
-    printTree(x);
+    printTree(v.*);
 
-    std.debug.print("{d}", .{eval(x)});
+    std.debug.print("{d}", .{eval(v.*)});
     const file = try std.fs.cwd().createFile("output.s", .{ .read = true });
     defer file.close();
 
-    const writer = file.writer();
+    var buffer: [1024]u8 = undefined;
+    var writer = file.writer(&buffer);
+    const interface = &writer.interface;
 
-    try writer.writeAll(".text\n");
-    try writer.writeAll(".globl _start\n");
-    try writer.writeAll("_start:\n");
-    try writeCode(writer, x);
-    try writer.writeAll("mov $1, %eax \n");
-    try writer.writeAll("popl %ebx\n");
-    try writer.writeAll("int $0x80\n");
+    try interface.print(".text\n", .{});
+    try interface.writeAll(".globl _start\n");
+    try interface.writeAll("_start:\n");
+    try writeCode(interface, v.*);
+    try interface.writeAll("mov $1, %eax \n");
+    try interface.writeAll("popl %ebx\n");
+    try interface.writeAll("int $0x80\n");
+
+    try interface.flush();
 }

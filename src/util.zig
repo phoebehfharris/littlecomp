@@ -16,10 +16,10 @@ pub fn create(allocator: Allocator, comptime T: type, value: anytype) !*T {
 pub fn eval(val: Value) i32 {
     return switch (val) {
         .int => |v| v,
-        .add => |v| eval(v.*[0]) + eval(v.*[1]),
-        .sub => |v| eval(v.*[0]) - eval(v.*[1]),
-        .mul => |v| eval(v.*[0]) * eval(v.*[1]),
-        .div => |v| @divExact(eval(v.*[0]), eval(v.*[1])),
+        .add => |v| eval(v[0].*) + eval(v[1].*),
+        .sub => |v| eval(v[0].*) - eval(v[1].*),
+        .mul => |v| eval(v[0].*) * eval(v[1].*),
+        .div => |v| @divExact(eval(v[0].*), eval(v[1].*)),
     };
 }
 
@@ -71,36 +71,36 @@ pub fn SliceIter(comptime T: type) type{
 pub fn printTree(input: Value) void {
     switch(input) {
         .mul => {
-            printTree(input.mul.@"0");
-            printTree(input.mul.@"1");
+            printTree(input.mul.@"0".*);
+            printTree(input.mul.@"1".*);
             std.debug.print("*", .{});
         },
         .div => {
-            printTree(input.div.@"0");
-            printTree(input.div.@"1");
+            printTree(input.div.@"0".*);
+            printTree(input.div.@"1".*);
             std.debug.print("/", .{});
         },
         .sub => {
-            printTree(input.sub.@"0");
-            printTree(input.sub.@"1");
+            printTree(input.sub.@"0".*);
+            printTree(input.sub.@"1".*);
             std.debug.print("-", .{});
         },
         .add => {
-            printTree(input.add.@"0");
-            printTree(input.add.@"1");
+            printTree(input.add.@"0".*);
+            printTree(input.add.@"1".*);
             std.debug.print("+", .{});
         },
         .int => std.debug.print("{d}", .{input.int}),
     }
 }
 
-pub fn free(allocator: Allocator, val: *const Value) void {
+pub fn free(allocator: Allocator, val: *Value) void {
     switch (val.*) {
+        .int => |_| {},
         .add, .sub, .mul, .div => |v| {
-            free(allocator, &v[0]);
-            free(allocator, &v[1]);
-            allocator.destroy(v);
+            free(allocator, v[0]);
+            free(allocator, v[1]);
         },
-        else => {},
     }
+    allocator.destroy(val);
 }

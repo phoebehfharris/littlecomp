@@ -14,9 +14,9 @@ const ValueType = enum {
     div,
 };
 
-const TupleType = struct { Value, Value };
+const TupleType = struct { *Value, *Value };
 
-pub const Value = union(ValueType) { int: i32, add: *TupleType, sub: *TupleType, mul: *TupleType, div: *TupleType };
+pub const Value = union(ValueType) { int: i32, add: TupleType, sub: TupleType, mul: TupleType, div: TupleType };
 
 const TokenType = enum {
     num,
@@ -35,17 +35,17 @@ const ParserError = error{unbalancedParens};
 
 
 pub fn lexExpr(allocator: Allocator, input: []const u8) ![]const Token {
-    var resArr = ArrayList(Token).init(allocator);
+    var resArr : ArrayList(Token) = .empty;
     var iter = SliceIter(u8).init(input);
     while (iter.next()) |char| {
         switch(char) {
             ' ' => {},
-            '+' => try resArr.append(Token.add),
-            '-' => try resArr.append(Token.sub),
-            '*' => try resArr.append(Token.mul),
-            '/' => try resArr.append(Token.div),
-            '(' => try resArr.append(Token.lparen),
-            ')' => try resArr.append(Token.rparen),
+            '+' => try resArr.append(allocator, Token.add),
+            '-' => try resArr.append(allocator, Token.sub),
+            '*' => try resArr.append(allocator, Token.mul),
+            '/' => try resArr.append(allocator, Token.div),
+            '(' => try resArr.append(allocator, Token.lparen),
+            ')' => try resArr.append(allocator, Token.rparen),
             '0'...'9' => {
                 var num = char - '0';
 
@@ -57,13 +57,13 @@ pub fn lexExpr(allocator: Allocator, input: []const u8) ![]const Token {
                         num += nextChar - '0';
                     } else break;
                 }
-                try resArr.append(Token{ .num = num });
+                try resArr.append(allocator, Token{ .num = num });
             },
             else => return LexerError.undefinedToken,
         }
     }
 
-    return resArr.toOwnedSlice();
+    return resArr.toOwnedSlice(allocator);
 }
 
 pub fn greaterEq(token1: Token, token2: Token) bool {
@@ -72,10 +72,10 @@ pub fn greaterEq(token1: Token, token2: Token) bool {
 
 pub fn handleToken(allocator: Allocator, token: Token, outputStack: *ArrayList(Value), operatorStack: *ArrayList(Token)) !void {
     try switch(token) {
-        .num => |n| outputStack.append(Value{ .int = n }),
-        .lparen => operatorStack.append(token),
+        .num => |n| outputStack.append(allocator, Value{ .int = n }),
+        .lparen => operatorStack.append(allocator, token),
         .rparen => {
-            while (operatorStack.popOrNull()) |operator| {
+            while (operatorStack.pop()) |operator| {
                 if (operator != Token.lparen) {
                     try createOperator(allocator, operator, outputStack);
                 } else return;
@@ -87,9 +87,9 @@ pub fn handleToken(allocator: Allocator, token: Token, outputStack: *ArrayList(V
                 // Top of the stack must have greater precedance. Break if token is greater or equal
                 if (greaterEq(token, topOperator)) break;
                 const x = operatorStack.pop();
-                try createOperator(allocator, x, outputStack);
+                try createOperator(allocator, x.?, outputStack);
             }
-            try operatorStack.append(token);
+            try operatorStack.append(allocator, token);
         }
     };
 }
@@ -98,42 +98,42 @@ fn createOperator(allocator: Allocator, token: Token, outputStack: *ArrayList(Va
     const left = outputStack.pop();
     const right = outputStack.pop();
     const val = switch(token) {
-        .mul => Value{ .mul = try util.create(allocator, TupleType, .{
-            left,
-            right
-        })},
-        .div => Value{ .div = try util.create(allocator, TupleType, .{
-            left,
-            right
-        })},
-        .sub => Value{ .sub = try util.create(allocator, TupleType, .{
-            left,
-            right
-        })},
-        .add => Value{ .add = try util.create(allocator, TupleType, .{
-            left,
-            right
-        })},
+        .mul => Value{ .mul = .{
+            try util.create(allocator, Value, left.?),
+            try util.create(allocator, Value, right.?)
+        }},
+        .div => Value{ .div = .{
+            try util.create(allocator, Value, left.?),
+            try util.create(allocator, Value, right.?)
+        }},
+        .sub => Value{ .sub = .{
+            try util.create(allocator, Value, left.?),
+            try util.create(allocator, Value, right.?)
+        }},
+        .add => Value{ .add = .{
+            try util.create(allocator, Value, left.?),
+            try util.create(allocator, Value, right.?)
+        }},
         .lparen => unreachable,
         .rparen => unreachable,
         .num => unreachable
     };
-    try outputStack.append(val);
+    try outputStack.append(allocator, val);
 }
 
 // We're going to try implement the shunting yard algorithm
 pub fn parseExpr(allocator: Allocator, input: []const Token) !Value {
-    var outputStack = ArrayList(Value).init(allocator);
-    var operatorStack = ArrayList(Token).init(allocator);
+    var outputStack : ArrayList(Value) = .empty;
+    var operatorStack : ArrayList(Token) = .empty;
     var sliceIter = SliceIter(Token).init(input);
 
     while (sliceIter.next()) |token| {
         try handleToken(allocator, token, &outputStack, &operatorStack);
     }
 
-    while (operatorStack.popOrNull()) |token| {
+    while (operatorStack.pop()) |token| {
         try createOperator(allocator, token, &outputStack);
     }
 
-    return outputStack.pop();
+    return outputStack.pop().?;
 }
