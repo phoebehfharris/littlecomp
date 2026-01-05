@@ -1,14 +1,17 @@
 const std = @import("std");
 const frontend = @import("frontend.zig");
+const backend = @import("backend.zig");
 
 const Allocator = std.mem.Allocator;
 
 const Value = frontend.Value;
+const LabelledValue = backend.LabelledValue;
 const Token = frontend.Token;
 
 pub fn create(allocator: Allocator, comptime T: type, value: anytype) !*T {
+    const typedValue: T = value;
     const x = try allocator.create(T);
-    x.* = value;
+    x.* = typedValue;
 
     return x;
 }
@@ -94,13 +97,26 @@ pub fn printTree(input: Value) void {
     }
 }
 
-pub fn free(allocator: Allocator, val: *Value) void {
+pub fn freeVal(allocator: Allocator, val: *Value) void {
     switch (val.*) {
         .int => |_| {},
         .add, .sub, .mul, .div => |v| {
-            free(allocator, v[0]);
-            free(allocator, v[1]);
+            freeVal(allocator, v[0]);
+            freeVal(allocator, v[1]);
         },
     }
+
     allocator.destroy(val);
+}
+
+pub fn freeLVal(allocator: Allocator, lval: *LabelledValue) void {
+    switch(lval.*.val) {
+        .int => |_| {},
+        .add, .sub, .mul, .div => |v| {
+            freeLVal(allocator, v[0]);
+            freeLVal(allocator, v[1]);
+        }
+    }
+
+    allocator.destroy(lval);
 }

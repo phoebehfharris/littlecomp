@@ -6,7 +6,7 @@ const ArrayList = std.ArrayList;
 
 const SliceIter = util.SliceIter;
 
-const ValueType = enum {
+pub const ValueType = enum {
     int,
     add,
     sub,
