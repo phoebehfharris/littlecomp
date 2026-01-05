@@ -85,6 +85,10 @@ pub fn handleToken(allocator: Allocator, token: Token, outputStack: *ArrayList(V
         .div, .mul, .sub, .add => {
             while (operatorStack.getLastOrNull()) |topOperator| {
                 // Top of the stack must have greater precedance. Break if token is greater or equal
+                switch(topOperator) {
+                    .lparen => break,
+                    else => {},
+                }
                 if (greaterEq(token, topOperator)) break;
                 const x = operatorStack.pop();
                 try createOperator(allocator, x.?, outputStack);
@@ -95,8 +99,8 @@ pub fn handleToken(allocator: Allocator, token: Token, outputStack: *ArrayList(V
 }
 
 fn createOperator(allocator: Allocator, token: Token, outputStack: *ArrayList(Value)) !void {
-    const left = outputStack.pop();
     const right = outputStack.pop();
+    const left = outputStack.pop();
     const val = switch(token) {
         .mul => Value{ .mul = .{
             try util.create(allocator, Value, left.?),
@@ -111,7 +115,7 @@ fn createOperator(allocator: Allocator, token: Token, outputStack: *ArrayList(Va
             try util.create(allocator, Value, right.?)
         }},
         .add => Value{ .add = .{
-            try util.create(allocator, Value, left.?),
+                try util.create(allocator, Value, left.?),
             try util.create(allocator, Value, right.?)
         }},
         .lparen => unreachable,

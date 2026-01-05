@@ -37,14 +37,39 @@ fn removeFromReglist(allocator: std.mem.Allocator, regList: ArrayList(u8), reg: 
 fn writeOperator(writer: *std.Io.Writer, val: LabelledValue, lreg: []const u8, rreg: []const u8) !void {
     switch(val.val) {
         .int => @panic("Not an operator!"),
-        .add => try writer.print("add {s}, {s}\n", .{rreg, lreg}),
-        .sub => try writer.print("sub {s}, {s}\n", .{rreg, lreg}),
-        .mul => try writer.print("imul {s}, {s}\n", .{rreg, lreg}),
+        .add => try writer.print("add {s}, {s}\n", .{lreg, rreg}),
+        .sub => try writer.print("sub {s}, {s}\n", .{lreg, rreg}),
+        .mul => try writer.print("imul {s}, {s}\n", .{lreg, rreg}),
         .div => {
-            try writer.print("xchg eax {s}", .{lreg});
-            try writer.print("cdq\n", .{});
-            try writer.print("idiv {s}\n", .{rreg});
-            try writer.print("xchg eax {s}", .{lreg});
+            // WE WANT TO DIVIDE RREG BY LREG
+            // LREG MAY BE IMMEDIATE MODE. RREG IS NOT
+            // Division sucks and I'm technically breaking my own rules but honestly who cares atp
+            // What if lreg is immediate mode?
+            // Need to put it in eax anyway
+            // RREG IS THE DESTINATION
+            // try writer.print("xchg %eax, {s}\n", .{lreg});
+            // try writer.print("cdq\n", .{});
+            // try writer.print("idiv %ebx\n", .{});
+            // try writer.print("movl %edi, %ebx\n", .{});
+            // try writer.print("movl %esi, %ebx\n", .{});
+            // try writer.print("xchg %eax, {s}\n", .{lreg});
+            std.debug.print("lreg: {s}, rreg: {s}", .{lreg, rreg});
+
+            if (!std.mem.eql(u8, "%eax", rreg)) {
+                try writer.print("xchg %eax, {s}\n", .{rreg});
+                try writer.print("movl {s}, %eax\n", .{rreg});
+                try writer.print("movl {s}, %esi\n", .{lreg});
+                try writer.print("cdq\n", .{});
+                // TODO: This might be immediate, so be careful
+                try writer.print("idiv %esi\n", .{});
+                try writer.print("xchg %eax, {s}\n", .{rreg});
+            } else {
+                try writer.print("movl {s}, %esi\n", .{lreg});
+                try writer.print("cdq\n", .{});
+                try writer.print("idiv %esi\n", .{});
+            }
+
+
         },
     }
 }
@@ -54,7 +79,7 @@ pub fn writeCodeSethiUllman(allocator: std.mem.Allocator, writer: *std.Io.Writer
     switch(lval.val) {
         .int => |v| {
             if (!left) {
-            @panic("Should be unreachable!");
+                @panic("Should be unreachable!");
             }
 
             try writer.print("movl ${}, %{s}\n", .{v, getRegisterName(regList.items[0])});
@@ -70,9 +95,9 @@ pub fn writeCodeSethiUllman(allocator: std.mem.Allocator, writer: *std.Io.Writer
                 try writeOperator(
                     writer,
                     lval,
+                    try std.fmt.allocPrint(allocator, "${}", .{rightChild.val.int}),
                     try std.fmt.allocPrint(allocator, "%{s}", .{getRegisterName(r)}),
-                    try std.fmt.allocPrint(allocator, "${}", .{rightChild.val.int})
-                    );
+                );
 
                 return r;
             } else if (leftChild.label >= rightChild.label and rightChild.label > 0 and rightChild.label < regList.items.len) {
@@ -102,66 +127,23 @@ pub fn writeCodeSethiUllman(allocator: std.mem.Allocator, writer: *std.Io.Writer
                 return r1;
             } else if (leftChild.label >= regList.items.len and rightChild.label >= regList.items.len) {
                 const r1 = try writeCodeSethiUllman(allocator, writer, rightChild, regList, tmp, false);
-                try writer.print("pushl %{s}", .{getRegisterName(r1)});
+                try writer.print("pushl %{s}\n", .{getRegisterName(r1)});
                 const r2 = try writeCodeSethiUllman(allocator, writer, leftChild, regList, tmp+1, true);
 
                 try writeOperator(
                     writer,
                     lval,
+                    "(%esp)",
                     try std.fmt.allocPrint(allocator, "%{s}", .{getRegisterName(r2)}),
-                    "(%esp)"
                 );
 
-                try writer.print("subl $4, %esp", .{});
+                try writer.print("addl $4, %esp\n", .{});
 
                 return r2;
             } else {
                 @panic("Should be unreachable!");
             }
         }
-    }
-}
-
-
-pub fn writeCode(writer: *std.Io.Writer, val: Value) !void {
-    switch (val) {
-        .int => |v| {
-            try writer.print("movl ${}, %eax\n", .{v});
-            try writer.writeAll("pushl %eax\n");
-        },
-        .add => |v| {
-            try writeCode(writer, v.*[0]);
-            try writeCode(writer, v.*[1]);
-            try writer.writeAll("popl %eax\n");
-            try writer.writeAll("popl %ebx\n");
-            try writer.writeAll("add %eax, %ebx\n");
-            try writer.writeAll("pushl %ebx\n");
-        },
-        .sub => |v| {
-            try writeCode(writer, v.*[0]);
-            try writeCode(writer, v.*[1]);
-            try writer.writeAll("popl %ebx\n");
-            try writer.writeAll("popl %eax\n");
-            try writer.writeAll("sub %eax, %ebx\n");
-            try writer.writeAll("pushl %ebx\n");
-        },
-        .mul => |v| {
-            try writeCode(writer, v.*[0]);
-            try writeCode(writer, v.*[1]);
-            try writer.writeAll("popl %eax\n");
-            try writer.writeAll("popl %ebx\n");
-            try writer.writeAll("imul %eax, %ebx\n");
-            try writer.writeAll("pushl %ebx\n");
-        },
-        .div => |v| {
-            try writeCode(writer, v.*[0]);
-            try writeCode(writer, v.*[1]);
-            try writer.writeAll("popl %ebx\n");
-            try writer.writeAll("cdq\n");
-            try writer.writeAll("popl %eax\n");
-            try writer.writeAll("idiv %ebx\n");
-            try writer.writeAll("pushl %ebx\n");
-        },
     }
 }
 
@@ -182,7 +164,7 @@ pub fn labelTree(allocator: Allocator, val: Value, left: bool) !LabelledValue {
                         try util.create(allocator, LabelledValue, rightChild)
                     },
                     val,
-                    leftChild.label + 1
+                    @max(leftChild.label, rightChild.label)
                 );
             } else {
                 return createLabelledValue(

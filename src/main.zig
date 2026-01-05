@@ -11,7 +11,6 @@ const LabelledValue = backend.LabelledValue;
 const lexExpr = frontend.lexExpr;
 const parseExpr = frontend.parseExpr;
 
-const writeCode = backend.writeCode;
 const writeCodeSethiUllman = backend.writeCodeSethiUllman;
 const labelTree = backend.labelTree;
 const getRegistername = backend.getRegisterName;
@@ -25,7 +24,7 @@ const eval = util.eval;
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    const input = "10 * 2 - 3";
+    const input = "((7 - 5) + (2 * 4)) + (1 * 3)";
     const tokens = try lexExpr(allocator, input);
 
     for (tokens) |token| {
@@ -42,8 +41,8 @@ pub fn main() !void {
 
     try regList.append(allocator, 0);
     try regList.append(allocator, 1);
-    try regList.append(allocator, 2);
-    try regList.append(allocator, 3);
+    // try regList.append(allocator, 2);
+    // try regList.append(allocator, 3);
 
     printTree(val.*);
 
@@ -58,7 +57,6 @@ pub fn main() !void {
     try interface.print(".text\n", .{});
     try interface.writeAll(".globl _start\n");
     try interface.writeAll("_start:\n");
-    // try writeCode(interface, val.*);
     const r = try writeCodeSethiUllman(allocator, interface, labelledVal.*, regList, 0, true);
     try interface.print("mov %{s}, %ebx\n", .{getRegistername(r)});
     try interface.writeAll("mov $1, %eax \n");

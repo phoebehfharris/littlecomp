@@ -20,9 +20,15 @@ pub fn eval(val: Value) i32 {
     return switch (val) {
         .int => |v| v,
         .add => |v| eval(v[0].*) + eval(v[1].*),
-        .sub => |v| eval(v[0].*) - eval(v[1].*),
+        .sub => |v| {
+            std.debug.print("\n{}, {}\n", .{eval(v[0].*), eval(v[1].*)});
+            return eval(v[0].*) - eval(v[1].*);
+        },
         .mul => |v| eval(v[0].*) * eval(v[1].*),
-        .div => |v| @divExact(eval(v[0].*), eval(v[1].*)),
+        .div => |v| {
+            std.debug.print("\n{}, {}\n", .{eval(v[0].*), eval(v[1].*)});
+            return std.math.divExact(i32, eval(v[0].*), eval(v[1].*)) catch @panic("OOPS");
+        },
     };
 }
 
